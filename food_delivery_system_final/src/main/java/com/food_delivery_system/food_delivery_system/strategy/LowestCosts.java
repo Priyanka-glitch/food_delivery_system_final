@@ -27,15 +27,20 @@ public class LowestCosts implements Selection {
     }
 
 
-    private double calculateTotalCost(List<OrderItem> orderItems, List<MenuItem> menuItems) {
+    public double calculateTotalCost(List<OrderItem> orderItems, List<MenuItem> restaurantMenuItems) {
         double totalCost = 0.0;
 
         for (OrderItem orderItem : orderItems) {
-            for (MenuItem menuItem : menuItems) {
-                if (menuItem.getId().equals(orderItem.getMenuItem().getId())) {
-                    totalCost += menuItem.getPrice() * orderItem.getQuantity();
-                }
+            MenuItem matchingMenuItem = restaurantMenuItems.stream()
+                    .filter(menuItem -> menuItem.getId().equals(orderItem.getMenuItem().getId()))
+                    .findFirst()
+                    .orElse(null);
+
+            if (matchingMenuItem == null) {
+                return Double.MAX_VALUE;  // Skip this restaurant if any item is not available
             }
+
+            totalCost += matchingMenuItem.getPrice() * orderItem.getQuantity();
         }
 
         return totalCost;
