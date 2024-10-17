@@ -3,6 +3,9 @@ package com.food_delivery_system.food_delivery_system.service;
 import com.food_delivery_system.food_delivery_system.model.Order;
 import com.food_delivery_system.food_delivery_system.model.Restaurant;
 import com.food_delivery_system.food_delivery_system.model.OrderItem;
+import com.food_delivery_system.food_delivery_system.model.MenuItem;
+import com.food_delivery_system.food_delivery_system.repo.MenuItemRepository;
+import com.food_delivery_system.food_delivery_system.strategy.LowestCosts;
 import com.food_delivery_system.food_delivery_system.utils.ConcurrencyUtils;
 import com.food_delivery_system.food_delivery_system.repo.OrderRepository;
 import com.food_delivery_system.food_delivery_system.repo.RestaurantRepository;
@@ -22,31 +25,52 @@ public class OrderService {
     @Autowired
     private RestaurantRepository restaurantRepository;
 
+    @Autowired
+    private LowestCosts lowestCostStrategy;
+
+    @Autowired
+    private MenuItemRepository menuItemRepository;
+
     public Order placeOrder(Order order) {
-            Long restaurantId = order.getRestaurant().getId();
-            Optional<Restaurant> restaurantOpt = restaurantRepository.findById(restaurantId);
+        List<Restaurant> allRestaurants = restaurantRepository.findAll();
+        if (allRestaurants.isEmpty()) {
+            throw new RuntimeException("No restaurants available to fulfill the order.");
+        }
+        
+        for (OrderItem orderItem : order.getOrderItems()) {
+            String menuItemName = orderItem.getMenuItem().getName(); 
 
-            if (restaurantOpt.isPresent()) {
-                Restaurant restaurant = restaurantOpt.get();
+            MenuItem menuItem = menuItemRepository.findByName(menuItemName)
+                    .orElseThrow(() -> new RuntimeException("MenuItem not found with name: " + menuItemName));
 
-                Lock lock = ConcurrencyUtils.getRestaurantLock(restaurantId);
-                boolean lockAcquired = lock.tryLock();
+            orderItem.setMenuItem(menuItem); 
+            orderItem.setOrder(order);        
+        }
+        
+        Restaurant selectedRestaurant = lowestCostStrategy.selectRestaurant(order.getOrderItems(), allRestaurants);
+        if (selectedRestaurant == null) {
+            throw new RuntimeException("No restaurant can fulfill the order.");
+        }
 
-                if (!lockAcquired) {
-                    throw new RuntimeException("Restaurant is busy processing other orders. Please try again later.");
-                }
+        Long restaurantId = selectedRestaurant.getId();
+        Lock lock = ConcurrencyUtils.getRestaurantLock(restaurantId);
+        boolean lockAcquired = lock.tryLock();
 
-                try {
-                    if (restaurant.getCapacity() < order.getOrderItems().size()) {
-                        throw new RuntimeException("Restaurant cannot fulfill the order due to capacity limits.");
-                    }
-                    return orderRepository.save(order);
-                } finally {
-                    lock.unlock();
-                }
-            } else {
-                throw new RuntimeException("Restaurant not found with ID: " + restaurantId);
+        if (!lockAcquired) {
+            throw new RuntimeException("Restaurant is busy processing other orders. Please try again later.");
+        }
+
+        try {
+            if (selectedRestaurant.getCapacity() < order.getOrderItems().size()) {
+                throw new RuntimeException("Restaurant cannot fulfill the order due to capacity limits.");
             }
+            
+            order.setRestaurant(selectedRestaurant);
+            
+            return orderRepository.save(order);
+        } finally {
+            lock.unlock();  
+        }
     }
 
     public List<Order> getAllOrders() {
