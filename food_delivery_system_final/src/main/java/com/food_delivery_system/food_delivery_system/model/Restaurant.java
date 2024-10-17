@@ -1,5 +1,6 @@
 package com.food_delivery_system.food_delivery_system.model;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import java.util.List;
 
@@ -14,7 +15,8 @@ public class Restaurant {
     private int capacity;
     private double rating;
 
-    @OneToMany(mappedBy = "restaurant", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "restaurant", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    @JsonManagedReference
     private List<MenuItem> menuItems;
 
     public Long getId() {
@@ -55,5 +57,8 @@ public class Restaurant {
 
     public void setMenuItems(List<MenuItem> menuItems) {
         this.menuItems = menuItems;
+        for (MenuItem menuItem : menuItems) {
+            menuItem.setRestaurant(this);
+        }
     }
 }
