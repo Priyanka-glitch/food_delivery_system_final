@@ -1,5 +1,6 @@
 package com.food_delivery_system.food_delivery_system.model;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import java.util.List;
 
@@ -20,9 +21,10 @@ public class Order {
     private Restaurant restaurant;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference
     private List<OrderItem> orderItems;
 
-    // Default constructor
+
     public Order() {}
 
 
